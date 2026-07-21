@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalops.local/contracts/error-envelope.schema.json",
+  "title": "SignalOps error envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "message"],
+  "properties": {
+    "code": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+    "message": {"type": "string", "maxLength": 500},
+    "traceId": {"type": "string", "maxLength": 64},
+    "correlationId": {"type": "string", "maxLength": 128}
+  }
+}
