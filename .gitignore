@@ -15,3 +15,4 @@ evaluation-results/
 Plan.md
 .firebase/
 .firebaserc
+.env.example

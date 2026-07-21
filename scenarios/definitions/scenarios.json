@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "maximumTtlSeconds": 600,
+  "scenarios": [
+    {"id":"F-01","name":"Slow Orders database","target":"orders-api","category":"database_latency","parameters":{"delayMs":1500}},
+    {"id":"F-02","name":"Payment error surge","target":"payments-api","category":"application_failure","parameters":{"failureRate":0.6,"seed":20260721}},
+    {"id":"F-03","name":"Inventory unavailable","target":"inventory-api","category":"service_unavailable","parameters":{}},
+    {"id":"F-04","name":"Orders to Payments network latency","target":"orders-api","category":"dependency_path_latency","parameters":{"delayMs":1100}}
+  ]
+}

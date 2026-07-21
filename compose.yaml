@@ -1,0 +1,148 @@
+name: signalops
+
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-signalops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
+      POSTGRES_DB: ${POSTGRES_DB:-signalops}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-signalops}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  inventory-api:
+    build: ./services/inventory-api
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DEMO_MODE: ${DEMO_MODE:-true}
+      FAULT_CONTROL_TOKEN: ${FAULT_CONTROL_TOKEN:-signalops-local-demo}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    ports: ["8102:8080"]
+    depends_on: { otel-collector: { condition: service_started } }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  payments-api:
+    build: ./services/payments-api
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DEMO_MODE: ${DEMO_MODE:-true}
+      FAULT_CONTROL_TOKEN: ${FAULT_CONTROL_TOKEN:-signalops-local-demo}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    ports: ["8101:8080"]
+    depends_on: { otel-collector: { condition: service_started } }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  orders-api:
+    build: ./services/orders-api
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      INVENTORY_URL: http://inventory-api:8080
+      PAYMENTS_URL: http://payments-api:8080
+      DEMO_MODE: ${DEMO_MODE:-true}
+      FAULT_CONTROL_TOKEN: ${FAULT_CONTROL_TOKEN:-signalops-local-demo}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    ports: ["8100:8080"]
+    depends_on:
+      inventory-api: { condition: service_healthy }
+      payments-api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  signalops-api:
+    build: ./apps/signalops-api
+    environment:
+      DEMO_MODE: ${DEMO_MODE:-true}
+      FAULT_CONTROL_TOKEN: ${FAULT_CONTROL_TOKEN:-signalops-local-demo}
+      DIAGNOSIS_PROVIDER: ${DIAGNOSIS_PROVIDER:-mock}
+      MAX_EVIDENCE_ITEMS: ${MAX_EVIDENCE_ITEMS:-24}
+      MAX_EVIDENCE_BYTES: ${MAX_EVIDENCE_BYTES:-32768}
+      ORDERS_URL: http://orders-api:8080
+      PAYMENTS_URL: http://payments-api:8080
+      INVENTORY_URL: http://inventory-api:8080
+    ports: ["8000:8000"]
+    volumes:
+      - signalops-data:/data
+    depends_on:
+      orders-api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  signalops-worker:
+    build: ./apps/signalops-worker
+    environment:
+      SIGNALOPS_API_URL: http://signalops-api:8000/api/v1
+      DETECTOR_INTERVAL_SECONDS: ${DETECTOR_INTERVAL_SECONDS:-20}
+    depends_on:
+      signalops-api: { condition: service_healthy }
+
+  traffic-generator:
+    build: ./apps/traffic-generator
+    environment:
+      ORDERS_URL: http://orders-api:8080
+      TRAFFIC_INTERVAL_SECONDS: 2
+      TRAFFIC_SEED: 20260721
+    depends_on:
+      orders-api: { condition: service_healthy }
+
+  web:
+    build: ./apps/web
+    environment:
+      NEXT_PUBLIC_SIGNALOPS_API_URL: http://localhost:8000/api/v1
+    ports: ["3000:3000"]
+    depends_on:
+      signalops-api: { condition: service_healthy }
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.130.1
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infrastructure/otel/collector.yaml:/etc/otelcol/config.yaml:ro
+    ports: ["4317:4317", "4318:4318", "8889:8889"]
+    depends_on: [loki, jaeger]
+
+  prometheus:
+    image: prom/prometheus:v3.4.2
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+
+  loki:
+    image: grafana/loki:3.5.1
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ./infrastructure/loki/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports: ["3100:3100"]
+
+  jaeger:
+    image: jaegertracing/jaeger:2.8.0
+    ports: ["16686:16686", "4317"]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  loki-data:
+  signalops-data:
