@@ -1,0 +1,7 @@
+{
+  "version":"scenarios-v1",
+  "positiveCases":12,
+  "negativeCases":4,
+  "variationsPerFault":["baseline traffic","lower traffic with noise","higher traffic with non-root-cause symptom"],
+  "qualityGates":{"detectionRecall":0.9,"falsePositiveRate":0.05,"rootCauseAccuracy":0.8,"evidenceValidity":1.0}
+}
