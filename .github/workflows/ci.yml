@@ -5,27 +5,28 @@ on:
 jobs:
   api:
     runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/signalops-api } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with: { python-version: '3.13' }
-      - run: pip install -r apps/signalops-api/requirements.txt
-      - run: pytest apps/signalops-api/tests
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tests
   dotnet:
     runs-on: ubuntu-latest
     strategy:
       matrix: { service: [orders-api, payments-api, inventory-api] }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
         with: { dotnet-version: '10.0.x' }
       - run: dotnet build services/${{ matrix.service }}
   web:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: apps/web } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm, cache-dependency-path: apps/web/package-lock.json }
       - run: npm ci
       - run: npm test
@@ -33,5 +34,5 @@ jobs:
     runs-on: ubuntu-latest
     needs: [api, dotnet, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: docker compose config --quiet
